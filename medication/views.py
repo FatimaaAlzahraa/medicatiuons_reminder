@@ -11,6 +11,8 @@ from django.conf import settings
 import joblib
 import numpy as np
 import json
+from django.db.models import Q
+from django.utils import timezone
 
 #Load model and matrices
 clf = joblib.load(settings.DRUG_INTERACTION_MODEL_PATH)
@@ -18,7 +20,7 @@ u = np.load(settings.U_MATRIX_PATH)
 vt = np.load(settings.VT_MATRIX_PATH)
 drug_index = np.load(settings.DRUG_INDEX_PATH, allow_pickle=True).item()
 
-# Severity Mapping
+# Severity Mapping for drug interactions
 severity_messages = {
     3: "Major interaction: Serious side effects may occur. Consult a healthcare provider.",
     2: "Moderate interaction: Potential interactions. Seek medical advice if needed.",
@@ -26,6 +28,7 @@ severity_messages = {
     0: "No known interaction."
 }
 
+# Function to preprocess input data for drug interaction prediction
 def preprocess_input(drug_a, drug_b):
     """Prepare input features for prediction."""
     idx1 = drug_index.get(drug_a)
@@ -34,6 +37,7 @@ def preprocess_input(drug_a, drug_b):
         return None
     return np.concatenate([u[idx1], vt[idx2]])
 
+# Function to predict the severity of a drug interaction
 def predict_interaction(drug_a, drug_b):
     """Predict severity of drug interaction."""
     features = preprocess_input(drug_a, drug_b)
@@ -42,9 +46,11 @@ def predict_interaction(drug_a, drug_b):
     severity_prediction = clf.predict([features])[0]
     return severity_messages.get(severity_prediction, "Unknown interaction level.")
 
+# Function to format medication name
 def format_medication_name(name):
     return name.capitalize() if name else name
 
+# 1. Function to create a new medication entry and check for interactions with existing medications
 @swagger_auto_schema(method='post', request_body=MedicationSerializer, responses={201: MedicationSerializer, 400: 'Bad Request'})
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -86,7 +92,7 @@ def create_medication(request):
     serializer = MedicationSerializer(medication)
     return Response(serializer.data, status=201)
 
-
+# 2. Function to update an existing medication entry and check for interactions with other medications
 @swagger_auto_schema(method='put', request_body=MedicationSerializer, responses={200: MedicationSerializer, 400: 'Bad Request', 404: 'Not Found'})
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
@@ -127,6 +133,7 @@ def update_medication(request, primary_key):
     return Response(serializer.data, status=200)
 
 
+# 3. Function to retrieve all medications for the authenticated user
 @swagger_auto_schema(method='get', responses={200: MedicationSerializer(many=True)})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -136,6 +143,8 @@ def get_medications(request):
     serializer = MedicationSerializer(medications, many=True)
     return Response(serializer.data)
 
+
+# 4. Function to retrieve a specific medication entry for the authenticated user
 @swagger_auto_schema(method='get', responses={200: MedicationSerializer})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -149,6 +158,27 @@ def get_medication(request, primary_key):
     serializer = MedicationSerializer(medication)
     return Response(serializer.data)
 
+# 5. Function to retrieve all active medications for the authenticated user
+@swagger_auto_schema(method='get', responses={200: MedicationSerializer(many=True)})
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_active_medications(request):
+    """Retrieve all active medications for the authenticated user."""
+    # Get current time
+    current_time = timezone.now()
+
+    # Filter medications where stopped_by_datetime is None or in the future
+    active_medications = Medication.objects.filter(
+        user=request.user
+    ).filter(
+        Q(stopped_by_datetime__gte=current_time) | Q(stopped_by_datetime__isnull=True)
+    )
+    
+    serializer = MedicationSerializer(active_medications, many=True)
+    return Response(serializer.data)
+
+
+# 6. Function to delete a medication entry for the authenticated user
 @swagger_auto_schema(method='delete', responses={204: 'No Content'})
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
