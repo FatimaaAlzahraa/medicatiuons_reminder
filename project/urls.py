@@ -41,9 +41,9 @@ urlpatterns = [
     path('accounts/', include(('accounts.urls', 'accounts'), namespace='accounts')),
     path('api-auth/', include('rest_framework.urls')),
     path("accounts/", include("allauth.urls")),
-    path('diet/', include(('diet.urls'), namespace='diet')),
+    # path('diet/', include(('diet.urls'), namespace='diet')),
     path('medication/', include(('medication.urls'), namespace='medication')),
-    path('footcare/', include(('footcare.urls', 'footcare'), namespace='footcare')),
+    # path('footcare/', include(('footcare.urls', 'footcare'), namespace='footcare')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
     
     ] 
